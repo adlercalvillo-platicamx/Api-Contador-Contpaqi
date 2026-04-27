@@ -22,7 +22,16 @@ def obtener_clientes():
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT CIDCLIENTE, CCODIGOCLIENTE, CRAZONSOCIAL, CRFC, CTELEFONO, CCORREO, CSALDOACTUAL FROM admClientes")
+        cursor.execute("""
+            SELECT 
+                CIDCLIENTEPROVEEDOR,
+                CCODIGOCLIENTE,
+                CRAZONSOCIAL,
+                CRFC,
+                CESTATUS
+            FROM admClientes
+            WHERE CCODIGOCLIENTE != '(Ninguno)'
+        """)
         columnas = [col[0] for col in cursor.description]
         resultados = [dict(zip(columnas, row)) for row in cursor.fetchall()]
         conn.close()
@@ -35,7 +44,16 @@ def obtener_cliente(codigo: str):
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM admClientes WHERE CCODIGOCLIENTE = ?", codigo)
+        cursor.execute("""
+            SELECT 
+                CIDCLIENTEPROVEEDOR,
+                CCODIGOCLIENTE,
+                CRAZONSOCIAL,
+                CRFC,
+                CESTATUS
+            FROM admClientes
+            WHERE CCODIGOCLIENTE = ?
+        """, codigo)
         columnas = [col[0] for col in cursor.description]
         row = cursor.fetchone()
         conn.close()
@@ -52,7 +70,17 @@ def obtener_productos():
     try:
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM admProductos")
+        cursor.execute("""
+            SELECT 
+                CIDPRODUCTO,
+                CCODIGOPRODUCTO,
+                CNOMBREPRODUCTO,
+                CPRECIO1,
+                CSTATUSPRODUCTO,
+                CCLAVESAT
+            FROM admProductos
+            WHERE CCODIGOPRODUCTO != '(Ninguno)'
+        """)
         columnas = [col[0] for col in cursor.description]
         resultados = [dict(zip(columnas, row)) for row in cursor.fetchall()]
         conn.close()
@@ -60,37 +88,29 @@ def obtener_productos():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/documentos/pendientes")
-def obtener_documentos_pendientes():
+@app.get("/productos/{codigo}")
+def obtener_producto(codigo: str):
     try:
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT d.CFOLIO, d.CFECHA, d.CTOTAL, c.CRAZONSOCIAL 
-            FROM admDocumentos d
-            JOIN admClientes c ON d.CIDCLIENTE = c.CIDCLIENTE
-            WHERE d.CESTADO = 'PENDIENTE'
-        """)
+            SELECT 
+                CIDPRODUCTO,
+                CCODIGOPRODUCTO,
+                CNOMBREPRODUCTO,
+                CPRECIO1,
+                CSTATUSPRODUCTO,
+                CCLAVESAT
+            FROM admProductos
+            WHERE CCODIGOPRODUCTO = ?
+        """, codigo)
         columnas = [col[0] for col in cursor.description]
-        resultados = [dict(zip(columnas, row)) for row in cursor.fetchall()]
+        row = cursor.fetchone()
         conn.close()
-        return {"documentos_pendientes": resultados}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/existencias")
-def obtener_existencias():
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT p.CNOMBREPRODUCTO, p.CCODIGOPRODUCTO, e.CUNIDADESEXISTENCIA
-            FROM admExistencias e
-            JOIN admProductos p ON e.CIDPRODUCTO = p.CIDPRODUCTO
-        """)
-        columnas = [col[0] for col in cursor.description]
-        resultados = [dict(zip(columnas, row)) for row in cursor.fetchall()]
-        conn.close()
-        return {"existencias": resultados}
+        if not row:
+            raise HTTPException(status_code=404, detail="Producto no encontrado")
+        return dict(zip(columnas, row))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
