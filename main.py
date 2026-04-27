@@ -4,16 +4,33 @@
 # de datos de CONTPAQi Comercial vía SQL Server.
 # ============================================================
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Security
+from fastapi.security.api_key import APIKeyHeader
 from dotenv import load_dotenv
 import pyodbc
 import os
 import time
 
-# Carga las variables del archivo .env (servidor, base de datos, credenciales)
+# Carga las variables del archivo .env (servidor, base de datos, credenciales y token)
 load_dotenv()
 
 app = FastAPI(title="Antonio API - CONTPAQi Consultas")
+
+# ============================================================
+# CONFIGURACIÓN DE AUTENTICACIÓN
+# Toda petición debe incluir el header X-API-Token con el
+# valor definido en el .env. Sin él, la API rechaza el request.
+# ============================================================
+API_KEY_NAME = "X-API-Token"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+async def verificar_token(api_key: str = Security(api_key_header)):
+    # Compara el token recibido con el definido en .env
+    if api_key != os.getenv("API_TOKEN"):
+        raise HTTPException(
+            status_code=401,
+            detail="Token inválido. No tienes autorización para consultar esta API."
+        )
 
 # ============================================================
 # CONFIGURACIÓN DE REINTENTOS
@@ -127,21 +144,11 @@ def ejecutar_query(query: str, params=None):
 # ============================================================
 # ENDPOINT: GET /clientes
 # Regresa la lista completa de clientes registrados en CONTPAQi.
-# Excluye el registro especial '(Ninguno)' que CONTPAQi crea
-# automáticamente al inicializar la empresa. Esto ya lo maneja
-# la vista creada previamente.
+# Requiere header X-API-Token válido.
 # ============================================================
 @app.get("/clientes")
-def obtener_clientes():
-    resultados = ejecutar_query("""
-        SELECT 
-            CIDCLIENTEPROVEEDOR,
-            CCODIGOCLIENTE,
-            CRAZONSOCIAL,
-            CRFC,
-            CESTATUS
-        FROM vw_AgenteClientes
-    """)
+async def obtener_clientes(token: str = Security(verificar_token)):
+    resultados = ejecutar_query("SELECT * FROM vw_AgenteClientes")
 
     if not resultados:
         return {
@@ -156,9 +163,10 @@ def obtener_clientes():
 # ENDPOINT: GET /clientes/{codigo}
 # Busca un cliente específico por su código en CONTPAQi.
 # Regresa 404 si no existe, 400 si el código está vacío.
+# Requiere header X-API-Token válido.
 # ============================================================
 @app.get("/clientes/{codigo}")
-def obtener_cliente(codigo: str):
+async def obtener_cliente(codigo: str, token: str = Security(verificar_token)):
     # Validación básica del parámetro
     if not codigo.strip():
         raise HTTPException(
@@ -166,16 +174,10 @@ def obtener_cliente(codigo: str):
             detail="El código del cliente no puede estar vacío."
         )
 
-    resultados = ejecutar_query("""
-        SELECT 
-            CIDCLIENTEPROVEEDOR,
-            CCODIGOCLIENTE,
-            CRAZONSOCIAL,
-            CRFC,
-            CESTATUS
-        FROM vw_AgenteClientes
-        WHERE CCODIGOCLIENTE = ?
-    """, codigo.strip())
+    resultados = ejecutar_query(
+        "SELECT * FROM vw_AgenteClientes WHERE CCODIGOCLIENTE = ?",
+        codigo.strip()
+    )
 
     if not resultados:
         raise HTTPException(
@@ -189,23 +191,11 @@ def obtener_cliente(codigo: str):
 # ============================================================
 # ENDPOINT: GET /productos
 # Regresa la lista completa de productos registrados en CONTPAQi.
-# Incluye precio de lista 1 y clave SAT para cada producto.
-# Excluye el registro especial '(Ninguno)' que CONTPAQi crea
-# automáticamente al inicializar la empresa. Esto ya lo maneja
-# la vista creada previamente.
+# Requiere header X-API-Token válido.
 # ============================================================
 @app.get("/productos")
-def obtener_productos():
-    resultados = ejecutar_query("""
-        SELECT 
-            CIDPRODUCTO,
-            CCODIGOPRODUCTO,
-            CNOMBREPRODUCTO,
-            CPRECIO1,
-            CSTATUSPRODUCTO,
-            CCLAVESAT
-        FROM vw_AgenteProductos
-    """)
+async def obtener_productos(token: str = Security(verificar_token)):
+    resultados = ejecutar_query("SELECT * FROM vw_AgenteProductos")
 
     if not resultados:
         return {
@@ -220,9 +210,10 @@ def obtener_productos():
 # ENDPOINT: GET /productos/{codigo}
 # Busca un producto específico por su código en CONTPAQi.
 # Regresa 404 si no existe, 400 si el código está vacío.
+# Requiere header X-API-Token válido.
 # ============================================================
 @app.get("/productos/{codigo}")
-def obtener_producto(codigo: str):
+async def obtener_producto(codigo: str, token: str = Security(verificar_token)):
     # Validación básica del parámetro
     if not codigo.strip():
         raise HTTPException(
@@ -230,17 +221,10 @@ def obtener_producto(codigo: str):
             detail="El código del producto no puede estar vacío."
         )
 
-    resultados = ejecutar_query("""
-        SELECT 
-            CIDPRODUCTO,
-            CCODIGOPRODUCTO,
-            CNOMBREPRODUCTO,
-            CPRECIO1,
-            CSTATUSPRODUCTO,
-            CCLAVESAT
-        FROM vw_AgenteProductos
-        WHERE CCODIGOPRODUCTO = ?
-    """, codigo.strip())
+    resultados = ejecutar_query(
+        "SELECT * FROM vw_AgenteProductos WHERE CCODIGOPRODUCTO = ?",
+        codigo.strip()
+    )
 
     if not resultados:
         raise HTTPException(
