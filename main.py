@@ -128,7 +128,8 @@ def ejecutar_query(query: str, params=None):
 # ENDPOINT: GET /clientes
 # Regresa la lista completa de clientes registrados en CONTPAQi.
 # Excluye el registro especial '(Ninguno)' que CONTPAQi crea
-# automáticamente al inicializar la empresa.
+# automáticamente al inicializar la empresa. Esto ya lo maneja
+# la vista creada previamente.
 # ============================================================
 @app.get("/clientes")
 def obtener_clientes():
@@ -139,8 +140,7 @@ def obtener_clientes():
             CRAZONSOCIAL,
             CRFC,
             CESTATUS
-        FROM admClientes
-        WHERE CCODIGOCLIENTE != '(Ninguno)'
+        FROM vw_AgenteClientes
     """)
 
     if not resultados:
@@ -173,7 +173,7 @@ def obtener_cliente(codigo: str):
             CRAZONSOCIAL,
             CRFC,
             CESTATUS
-        FROM admClientes
+        FROM vw_AgenteClientes
         WHERE CCODIGOCLIENTE = ?
     """, codigo.strip())
 
@@ -190,6 +190,9 @@ def obtener_cliente(codigo: str):
 # ENDPOINT: GET /productos
 # Regresa la lista completa de productos registrados en CONTPAQi.
 # Incluye precio de lista 1 y clave SAT para cada producto.
+# Excluye el registro especial '(Ninguno)' que CONTPAQi crea
+# automáticamente al inicializar la empresa. Esto ya lo maneja
+# la vista creada previamente.
 # ============================================================
 @app.get("/productos")
 def obtener_productos():
@@ -201,8 +204,7 @@ def obtener_productos():
             CPRECIO1,
             CSTATUSPRODUCTO,
             CCLAVESAT
-        FROM admProductos
-        WHERE CCODIGOPRODUCTO != '(Ninguno)'
+        FROM vw_AgenteProductos
     """)
 
     if not resultados:
@@ -236,7 +238,7 @@ def obtener_producto(codigo: str):
             CPRECIO1,
             CSTATUSPRODUCTO,
             CCLAVESAT
-        FROM admProductos
+        FROM vw_AgenteProductos
         WHERE CCODIGOPRODUCTO = ?
     """, codigo.strip())
 
