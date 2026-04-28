@@ -1,3 +1,5 @@
 @echo off
 cd C:\PlaticaMX\AntonioAPIConsultas
-cloudflared-windows-amd64.exe tunnel --url http://localhost:1433
+call venv\Scripts\activate
+start uvicorn main:app --port 8000
+cloudflared-windows-amd64.exe tunnel --url http://localhost:8000
