@@ -3,3 +3,4 @@ venv/
 __pycache__/
 *.pyc
 cloudflared-windows-amd64.exe
+ngrok.exe
