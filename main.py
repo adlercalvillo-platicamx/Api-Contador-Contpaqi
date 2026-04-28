@@ -4,7 +4,7 @@
 # de datos de CONTPAQi Comercial vía SQL Server.
 # ============================================================
 
-from fastapi import FastAPI, HTTPException, Security
+from fastapi import FastAPI, HTTPException, Security, Query
 from fastapi.security.api_key import APIKeyHeader
 from dotenv import load_dotenv
 import pyodbc
@@ -143,12 +143,34 @@ def ejecutar_query(query: str, params=None):
 
 # ============================================================
 # ENDPOINT: GET /clientes
-# Regresa la lista completa de clientes registrados en CONTPAQi.
+# Regresa clientes registrados en CONTPAQi.
+# Query params:
+#   - limite: cuántos registros regresar (default 50, max 500)
+#   - offset: desde qué registro empezar (default 0)
+#   - orden: asc = primeros registrados, desc = últimos (default asc)
 # Requiere header X-API-Token válido.
 # ============================================================
 @app.get("/clientes")
-async def obtener_clientes(token: str = Security(verificar_token)):
-    resultados = ejecutar_query("SELECT * FROM vw_AgenteClientes")
+async def obtener_clientes(
+    limite: int = Query(default=50, ge=1, le=500, description="Número de registros a regresar"),
+    offset: int = Query(default=0, ge=0, description="Número de registros a saltar"),
+    orden: str = Query(default="asc", pattern="^(asc|desc)$", description="asc = primeros, desc = últimos"),
+    token: str = Security(verificar_token)
+):
+    # Construye la query con paginación y orden dinámico
+    orden_sql = "ASC" if orden == "asc" else "DESC"
+    query = f"""
+        SELECT * FROM (
+            SELECT *, ROW_NUMBER() OVER (ORDER BY CIDCLIENTEPROVEEDOR {orden_sql}) AS rn
+            FROM vw_AgenteClientes
+        ) t
+        WHERE rn > ? AND rn <= ?
+    """
+    resultados = ejecutar_query(query, (offset, offset + limite))
+
+    # Elimina la columna auxiliar rn del resultado
+    for r in resultados:
+        r.pop("rn", None)
 
     if not resultados:
         return {
@@ -156,7 +178,13 @@ async def obtener_clientes(token: str = Security(verificar_token)):
             "clientes": []
         }
 
-    return {"clientes": resultados}
+    return {
+        "total_regresados": len(resultados),
+        "limite": limite,
+        "offset": offset,
+        "orden": orden,
+        "clientes": resultados
+    }
 
 
 # ============================================================
@@ -190,12 +218,34 @@ async def obtener_cliente(codigo: str, token: str = Security(verificar_token)):
 
 # ============================================================
 # ENDPOINT: GET /productos
-# Regresa la lista completa de productos registrados en CONTPAQi.
+# Regresa productos registrados en CONTPAQi.
+# Query params:
+#   - limite: cuántos registros regresar (default 50, max 500)
+#   - offset: desde qué registro empezar (default 0)
+#   - orden: asc = primeros registrados, desc = últimos (default asc)
 # Requiere header X-API-Token válido.
 # ============================================================
 @app.get("/productos")
-async def obtener_productos(token: str = Security(verificar_token)):
-    resultados = ejecutar_query("SELECT * FROM vw_AgenteProductos")
+async def obtener_productos(
+    limite: int = Query(default=50, ge=1, le=500, description="Número de registros a regresar"),
+    offset: int = Query(default=0, ge=0, description="Número de registros a saltar"),
+    orden: str = Query(default="asc", pattern="^(asc|desc)$", description="asc = primeros, desc = últimos"),
+    token: str = Security(verificar_token)
+):
+    # Construye la query con paginación y orden dinámico
+    orden_sql = "ASC" if orden == "asc" else "DESC"
+    query = f"""
+        SELECT * FROM (
+            SELECT *, ROW_NUMBER() OVER (ORDER BY CIDPRODUCTO {orden_sql}) AS rn
+            FROM vw_AgenteProductos
+        ) t
+        WHERE rn > ? AND rn <= ?
+    """
+    resultados = ejecutar_query(query, (offset, offset + limite))
+
+    # Elimina la columna auxiliar rn del resultado
+    for r in resultados:
+        r.pop("rn", None)
 
     if not resultados:
         return {
@@ -203,7 +253,13 @@ async def obtener_productos(token: str = Security(verificar_token)):
             "productos": []
         }
 
-    return {"productos": resultados}
+    return {
+        "total_regresados": len(resultados),
+        "limite": limite,
+        "offset": offset,
+        "orden": orden,
+        "productos": resultados
+    }
 
 
 # ============================================================
