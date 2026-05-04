@@ -292,6 +292,104 @@ async def obtener_producto(codigo: str, token: str = Security(verificar_token)):
 
 
 # ============================================================
+# ENDPOINT: GET /documentos
+# Regresa documentos (facturas) registrados en CONTPAQi.
+# Query params:
+#   - limite: cuántos registros regresar (default 50, max 500)
+#   - offset: desde qué registro empezar (default 0)
+#   - orden: asc = primeros registrados, desc = últimos (default asc)
+# Requiere header X-API-Token válido.
+# ============================================================
+@app.get("/documentos")
+async def obtener_documentos(
+    limite: int = Query(default=50, ge=1, le=500, description="Número de registros a regresar"),
+    offset: int = Query(default=0, ge=0, description="Número de registros a saltar"),
+    orden: str = Query(default="asc", pattern="^(asc|desc)$", description="asc = primeros, desc = últimos"),
+    token: str = Security(verificar_token)
+):
+    orden_sql = "ASC" if orden == "asc" else "DESC"
+    query = f"""
+        SELECT * FROM (
+            SELECT *, ROW_NUMBER() OVER (ORDER BY CIDDOCUMENTO {orden_sql}) AS rn
+            FROM vw_AgenteDocumentos
+        ) t
+        WHERE rn > ? AND rn <= ?
+    """
+    resultados = ejecutar_query(query, (offset, offset + limite))
+
+    for r in resultados:
+        r.pop("rn", None)
+
+    if not resultados:
+        return {
+            "mensaje": "No se encontraron documentos registrados en CONTPAQi.",
+            "documentos": []
+        }
+
+    return {
+        "total_regresados": len(resultados),
+        "limite": limite,
+        "offset": offset,
+        "orden": orden,
+        "documentos": resultados
+    }
+
+
+# ============================================================
+# ENDPOINT: GET /documentos/cliente/{codigo}
+# Regresa todos los documentos pendientes de un cliente específico.
+# Útil para consultas de cobranza por cliente.
+# Requiere header X-API-Token válido.
+# ============================================================
+@app.get("/documentos/cliente/{codigo}")
+async def obtener_documentos_cliente(codigo: str, token: str = Security(verificar_token)):
+    # Validación básica del parámetro
+    if not codigo.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="El código del cliente no puede estar vacío."
+        )
+
+    # Busca el ID del cliente por su código
+    cliente = ejecutar_query(
+        "SELECT CIDCLIENTEPROVEEDOR FROM vw_AgenteClientes WHERE CCODIGOCLIENTE = ?",
+        codigo.strip()
+    )
+
+    if not cliente:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No se encontró ningún cliente con el código '{codigo}' en CONTPAQi."
+        )
+
+    id_cliente = cliente[0]["CIDCLIENTEPROVEEDOR"]
+
+    # Busca documentos pendientes del cliente
+    resultados = ejecutar_query(
+        """
+        SELECT * FROM vw_AgenteDocumentos
+        WHERE CIDCLIENTEPROVEEDOR = ?
+        AND CPENDIENTE > 0
+        ORDER BY CFECHA ASC
+        """,
+        id_cliente
+    )
+
+    if not resultados:
+        return {
+            "mensaje": f"El cliente '{codigo}' no tiene documentos pendientes en CONTPAQi.",
+            "documentos": []
+        }
+
+    return {
+        "total_regresados": len(resultados),
+        "cliente_codigo": codigo,
+        "documentos": resultados
+    }
+
+
+
+# ============================================================
 # ENDPOINT: GET /health
 # Endpoint liviano para verificar que el servidor está activo.
 # No toca la base de datos. Se usa para mantener el túnel de
