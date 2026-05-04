@@ -53,7 +53,7 @@ def get_connection():
         f"DATABASE={os.getenv('DB_NAME')};"
         f"UID={os.getenv('DB_USER')};"
         f"PWD={os.getenv('DB_PASSWORD')};"
-        f"Connection Timeout=10;"
+        f"Connection Timeout=30;"
     )
 
     ultimo_error = None
@@ -289,3 +289,14 @@ async def obtener_producto(codigo: str, token: str = Security(verificar_token)):
         )
 
     return resultados[0]
+
+
+# ============================================================
+# ENDPOINT: GET /health
+# Endpoint liviano para verificar que el servidor está activo.
+# No toca la base de datos. Se usa para mantener el túnel de
+# ngrok activo y evitar que se duerma por inactividad.
+# ============================================================
+@app.get("/health")
+async def health():
+    return {"status": "ok", "servidor": "Antonio API CONTPAQi"}
