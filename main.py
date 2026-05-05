@@ -454,6 +454,34 @@ async def obtener_resumen_cobranza_cliente(codigo: str, token: str = Security(ve
     return resultados[0]
 
 
+# ============================================================
+# ENDPOINT: GET /clientes/rfc/{rfc}
+# Busca un cliente específico por su RFC en CONTPAQi.
+# Regresa 404 si no existe, 400 si el RFC está vacío.
+# Requiere header X-API-Token válido.
+# ============================================================
+@app.get("/clientes/rfc/{rfc}")
+async def obtener_cliente_por_rfc(rfc: str, token: str = Security(verificar_token)):
+    # Validación básica del parámetro
+    if not rfc.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="El RFC no puede estar vacío."
+        )
+
+    resultados = ejecutar_query(
+        "SELECT * FROM vw_AgenteClientes WHERE CRFC = ?",
+        rfc.strip().upper()
+    )
+
+    if not resultados:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No se encontró ningún cliente con el RFC '{rfc}' en CONTPAQi."
+        )
+
+    return resultados[0]
+
 
 # ============================================================
 # ENDPOINT: GET /health
