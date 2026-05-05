@@ -484,6 +484,71 @@ async def obtener_cliente_por_rfc(rfc: str, token: str = Security(verificar_toke
 
 
 # ============================================================
+# ENDPOINT: GET /documentos/fechas
+# Regresa documentos en un rango de fechas específico.
+# Query params:
+#   - fecha_inicio: fecha de inicio en formato YYYY-MM-DD
+#   - fecha_fin: fecha de fin en formato YYYY-MM-DD
+#   - limite: cuántos registros regresar (default 50, max 500)
+#   - offset: desde qué registro empezar (default 0)
+# Requiere header X-API-Token válido.
+# ============================================================
+@app.get("/documentos/fechas")
+async def obtener_documentos_por_fechas(
+    fecha_inicio: str = Query(description="Fecha de inicio en formato YYYY-MM-DD"),
+    fecha_fin: str = Query(description="Fecha de fin en formato YYYY-MM-DD"),
+    limite: int = Query(default=50, ge=1, le=500, description="Número de registros a regresar"),
+    offset: int = Query(default=0, ge=0, description="Número de registros a saltar"),
+    token: str = Security(verificar_token)
+):
+    # Validación de fechas
+    try:
+        from datetime import datetime
+        fecha_inicio_dt = datetime.strptime(fecha_inicio, "%Y-%m-%d")
+        fecha_fin_dt = datetime.strptime(fecha_fin, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Formato de fecha incorrecto. Usa el formato YYYY-MM-DD (ej. 2026-04-01)."
+        )
+
+    if fecha_inicio_dt > fecha_fin_dt:
+        raise HTTPException(
+            status_code=400,
+            detail="La fecha de inicio no puede ser mayor a la fecha de fin."
+        )
+
+    query = f"""
+        SELECT * FROM (
+            SELECT *, ROW_NUMBER() OVER (ORDER BY CFECHA ASC) AS rn
+            FROM vw_AgenteDocumentos
+            WHERE CFECHA >= ? AND CFECHA < DATEADD(day, 1, CAST(? AS DATE))
+        ) t
+        WHERE rn > ? AND rn <= ?
+    """
+
+    resultados = ejecutar_query(query, (fecha_inicio, fecha_fin, offset, offset + limite))
+
+    for r in resultados:
+        r.pop("rn", None)
+
+    if not resultados:
+        return {
+            "mensaje": f"No se encontraron documentos entre {fecha_inicio} y {fecha_fin}.",
+            "documentos": []
+        }
+
+    return {
+        "total_regresados": len(resultados),
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": fecha_fin,
+        "limite": limite,
+        "offset": offset,
+        "documentos": resultados
+    }
+
+
+# ============================================================
 # ENDPOINT: GET /health
 # Endpoint liviano para verificar que el servidor está activo.
 # No toca la base de datos. Se usa para mantener el túnel de
