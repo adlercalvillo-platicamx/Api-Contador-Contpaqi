@@ -388,6 +388,72 @@ async def obtener_documentos_cliente(codigo: str, token: str = Security(verifica
     }
 
 
+# ============================================================
+# ENDPOINT: GET /cobranza/resumen
+# Regresa un resumen de cobranza por cliente — total facturado,
+# total pendiente y número de facturas de cada cliente.
+# Requiere header X-API-Token válido.
+# ============================================================
+@app.get("/cobranza/resumen")
+async def obtener_resumen_cobranza(token: str = Security(verificar_token)):
+    resultados = ejecutar_query("SELECT * FROM vw_AgenteResumenCobranza ORDER BY CTOTALPENDIENTE DESC")
+
+    if not resultados:
+        return {
+            "mensaje": "No hay documentos pendientes en CONTPAQi.",
+            "resumen": []
+        }
+
+    total_general = sum(r["CTOTALPENDIENTE"] for r in resultados)
+
+    return {
+        "total_pendiente_general": round(total_general, 2),
+        "total_clientes_con_saldo": len(resultados),
+        "resumen": resultados
+    }
+
+
+# ============================================================
+# ENDPOINT: GET /cobranza/resumen/{codigo}
+# Regresa el resumen de cobranza de un cliente específico.
+# Requiere header X-API-Token válido.
+# ============================================================
+@app.get("/cobranza/resumen/{codigo}")
+async def obtener_resumen_cobranza_cliente(codigo: str, token: str = Security(verificar_token)):
+    if not codigo.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="El código del cliente no puede estar vacío."
+        )
+
+    # Busca el ID del cliente por su código
+    cliente = ejecutar_query(
+        "SELECT CIDCLIENTEPROVEEDOR FROM vw_AgenteClientes WHERE CCODIGOCLIENTE = ?",
+        codigo.strip()
+    )
+
+    if not cliente:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No se encontró ningún cliente con el código '{codigo}' en CONTPAQi."
+        )
+
+    id_cliente = cliente[0]["CIDCLIENTEPROVEEDOR"]
+
+    resultados = ejecutar_query(
+        "SELECT * FROM vw_AgenteResumenCobranza WHERE CIDCLIENTEPROVEEDOR = ?",
+        id_cliente
+    )
+
+    if not resultados:
+        return {
+            "mensaje": f"El cliente '{codigo}' no tiene facturas pendientes en CONTPAQi.",
+            "resumen": {}
+        }
+
+    return resultados[0]
+
+
 
 # ============================================================
 # ENDPOINT: GET /health
